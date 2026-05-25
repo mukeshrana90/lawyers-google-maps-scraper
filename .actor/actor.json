@@ -1,0 +1,106 @@
+{
+    "actorSpecification": 1,
+    "name": "lawyers-google-maps-scraper",
+    "title": "Lawyers Google Maps Scraper",
+    "description": "Scrape lawyers and law firms from Google Maps with email, social, practice areas, fee structure, languages spoken, services list, review sentiment, online-booking / free-consultation detection, metro area classification, and firm-size classification.",
+    "version": "1.0",
+    "buildTag": "latest",
+    "minMemoryMbytes": 8192,
+    "maxMemoryMbytes": 32768,
+    "defaultRunOptions": {
+        "memoryMbytes": 8192,
+        "timeoutSecs": 1800
+    },
+    "input": "./INPUT_SCHEMA.json",
+    "output": "./output_schema.json",
+    "dockerfile": "../Dockerfile",
+    "storages": {
+        "dataset": {
+            "actorSpecification": 1,
+            "title": "Lawyers",
+            "fields": {
+                "type": "object",
+                "properties": {
+                    "name":           { "type": ["string", "null"], "title": "Firm / Lawyer Name" },
+                    "category":       { "type": ["string", "null"], "title": "Google Maps Category" },
+                    "subCategories":  { "type": ["array", "null"],  "title": "Sub-category tags" },
+                    "practiceAreas":  { "type": ["array", "null"],  "title": "Practice Areas" },
+                    "address":        { "type": ["string", "null"], "title": "Street Address" },
+                    "fullAddress":    { "type": ["string", "null"], "title": "Full Address" },
+                    "city":           { "type": ["string", "null"], "title": "City" },
+                    "state":          { "type": ["string", "null"], "title": "State" },
+                    "country":        { "type": ["string", "null"], "title": "Country" },
+                    "postalCode":     { "type": ["string", "null"], "title": "Postal Code" },
+                    "latitude":       { "type": ["number", "null"], "title": "Latitude" },
+                    "longitude":      { "type": ["number", "null"], "title": "Longitude" },
+                    "phone":          { "type": ["string", "null"], "title": "Phone" },
+                    "website":        { "type": ["string", "null"], "title": "Website" },
+                    "email":          { "type": ["string", "null"], "title": "Email" },
+                    "instagram":      { "type": ["string", "null"], "title": "Instagram" },
+                    "facebook":       { "type": ["string", "null"], "title": "Facebook" },
+                    "linkedin":       { "type": ["string", "null"], "title": "LinkedIn" },
+                    "twitter":        { "type": ["string", "null"], "title": "Twitter / X" },
+                    "feeStructure":   { "type": ["array", "null"],  "title": "Fee Structure", "description": "contingency / free_consultation / flat_fee / hourly / sliding_scale / pro_bono" },
+                    "languagesSpoken":{ "type": ["array", "null"],  "title": "Languages Spoken" },
+                    "servicesOffered":{ "type": ["array", "null"],  "title": "Services / Specialisations" },
+                    "hasOnlineBooking":     { "type": ["boolean", "null"], "title": "Online Booking" },
+                    "bookingPlatform":      { "type": ["string", "null"],  "title": "Booking Platform" },
+                    "bookingUrl":           { "type": ["string", "null"],  "title": "Booking URL" },
+                    "hasFreeConsultation":  { "type": ["boolean", "null"], "title": "Free Consultation" },
+                    "freeConsultationEvidence": { "type": ["string", "null"], "title": "Free Consultation Evidence" },
+                    "freeConsultationUrl":  { "type": ["string", "null"],  "title": "Free Consultation URL" },
+                    "isMetroArea":    { "type": ["boolean", "null"], "title": "In Metro Area" },
+                    "metroName":      { "type": ["string", "null"],  "title": "Metro Name" },
+                    "metroTier":      { "type": ["number", "null"],  "title": "Metro Tier" },
+                    "firmSize":       { "type": ["string", "null"],  "title": "Firm Size", "description": "solo / small / mid / large / unknown" },
+                    "firmSizeLabel":  { "type": ["string", "null"],  "title": "Firm Size Label" },
+                    "firmSizeConfidence": { "type": ["string", "null"], "title": "Classification Confidence" },
+                    "rating":         { "type": ["number", "null"],  "title": "Rating" },
+                    "reviewCount":    { "type": ["number", "null"],  "title": "Review Count" },
+                    "reviewSentiment":{ "type": ["object", "null"],  "title": "Review Sentiment" },
+                    "hours":          { "type": ["object", "null"],  "title": "Business Hours" },
+                    "isOpenNow":      { "type": ["boolean", "null"], "title": "Open Now" },
+                    "placeId":        { "type": ["string", "null"],  "title": "Place ID" },
+                    "mapsUrl":        { "type": ["string", "null"],  "title": "Maps URL" },
+                    "scrapedAt":      { "type": "string",            "title": "Scraped At" },
+                    "searchTerm":     { "type": ["string", "null"],  "title": "Search Term" },
+                    "searchLocation": { "type": ["string", "null"],  "title": "Search Location" }
+                }
+            },
+            "views": {
+                "overview": {
+                    "title": "Overview",
+                    "transformation": {
+                        "fields": [
+                            "name", "category", "practiceAreas", "fullAddress",
+                            "phone", "email", "website",
+                            "rating", "reviewCount",
+                            "firmSize", "feeStructure",
+                            "hasOnlineBooking", "hasFreeConsultation",
+                            "isMetroArea"
+                        ]
+                    },
+                    "display": {
+                        "component": "table",
+                        "properties": {
+                            "name":          { "label": "Name", "format": "text" },
+                            "category":      { "label": "Category", "format": "text" },
+                            "practiceAreas": { "label": "Practice Areas", "format": "array" },
+                            "fullAddress":   { "label": "Address", "format": "text" },
+                            "phone":         { "label": "Phone", "format": "text" },
+                            "email":         { "label": "Email", "format": "text" },
+                            "website":       { "label": "Website", "format": "link" },
+                            "rating":        { "label": "Rating", "format": "number" },
+                            "reviewCount":   { "label": "Reviews", "format": "number" },
+                            "firmSize":      { "label": "Firm Size", "format": "text" },
+                            "feeStructure":  { "label": "Fee Structure", "format": "array" },
+                            "hasOnlineBooking":    { "label": "Online Booking", "format": "boolean" },
+                            "hasFreeConsultation": { "label": "Free Consult", "format": "boolean" },
+                            "isMetroArea":   { "label": "Metro Area", "format": "boolean" }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

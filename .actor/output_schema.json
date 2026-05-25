@@ -1,0 +1,13 @@
+{
+    "actorOutputSchemaVersion": 1,
+    "title": "Lawyers dataset",
+    "description": "Scraped lawyers and law firms from Google Maps with contact details, practice areas, fee structure, languages, services, booking detection, and firm-size classification.",
+    "properties": {
+        "defaultDataset": {
+            "type": "string",
+            "title": "Lawyers",
+            "description": "Dataset containing scraped lawyers / law firms with 35+ fields including contact info, social media, practice areas, fee structure, languages spoken, services list, review sentiment, online booking detection, free consultation, metro classification, and firm size.",
+            "template": "{{links.apiDefaultDatasetUrl}}/items"
+        }
+    }
+}

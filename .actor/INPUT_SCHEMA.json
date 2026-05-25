@@ -1,0 +1,80 @@
+{
+    "title": "Lawyers Google Maps Scraper",
+    "description": "Scrapes lawyers and law firms from Google Maps with deep enrichment — emails, socials, practice areas, fee structure, languages spoken, services list, review sentiment, online-booking / free-consultation detection, metro classification, and firm-size classification.",
+    "type": "object",
+    "schemaVersion": 1,
+    "properties": {
+        "searchTerms": {
+            "title": "Search terms",
+            "type": "array",
+            "description": "Lawyer / attorney categories to search for (e.g. personal injury lawyer, immigration attorney, divorce lawyer, criminal defense, real estate attorney)",
+            "editor": "stringList",
+            "prefill": ["personal injury lawyer", "immigration attorney"],
+            "default": ["personal injury lawyer"],
+            "sectionCaption": "Search settings",
+            "sectionDescription": "Enter search terms and locations. Each search term is combined with each location."
+        },
+        "locations": {
+            "title": "Locations",
+            "type": "array",
+            "description": "Cities, regions, or countries to search in (e.g. New York, USA or London, UK)",
+            "editor": "stringList",
+            "prefill": ["New York, USA"],
+            "default": ["New York, USA"]
+        },
+        "maxResults": {
+            "title": "Max results per search",
+            "type": "integer",
+            "description": "Maximum number of lawyers / firms to scrape in total across all search term + location combinations",
+            "default": 50,
+            "prefill": 20,
+            "minimum": 1,
+            "maximum": 500
+        },
+        "minRating": {
+            "title": "Minimum rating filter",
+            "type": "number",
+            "description": "Only include lawyers / firms with this Google rating or above (0 = no filter)",
+            "default": 0,
+            "prefill": 0,
+            "minimum": 0,
+            "maximum": 5,
+            "sectionCaption": "Filters",
+            "sectionDescription": "Filter results by rating."
+        },
+        "enrichEmails": {
+            "title": "Extract emails",
+            "type": "boolean",
+            "description": "Visit each firm's website and extract the best contact email (homepage + /contact fallback). Prefers intake@ / consult@ / contact@ over generic addresses.",
+            "default": false,
+            "sectionCaption": "Enrichment options",
+            "sectionDescription": "Enable or disable enrichment features. Each enrichment adds extra data and run time."
+        },
+        "enrichSocials": {
+            "title": "Extract social media links",
+            "type": "boolean",
+            "description": "Extract Instagram, Facebook, LinkedIn, and X/Twitter profile links from the firm's website",
+            "default": false
+        },
+        "enrichLawyer": {
+            "title": "Lawyer enrichment",
+            "type": "boolean",
+            "description": "Extract practice areas (immigration, PI, family, etc.), fee structure (contingency / hourly / flat / free consultation), languages spoken, services list, and review sentiment analysis",
+            "default": false
+        },
+        "enrichLawyerNiche": {
+            "title": "Niche classification",
+            "type": "boolean",
+            "description": "Detect online booking (Calendly, Acuity, Clio Grow), free-consultation availability, metro area, and firm size (solo / small / mid / large)",
+            "default": false
+        },
+        "proxyConfig": {
+            "title": "Proxy configuration",
+            "type": "object",
+            "description": "Residential proxies recommended for high-volume runs to avoid Google Maps blocks",
+            "editor": "proxy",
+            "default": { "useApifyProxy": true },
+            "sectionCaption": "Advanced settings"
+        }
+    }
+}

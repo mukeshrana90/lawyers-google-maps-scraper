@@ -1,0 +1,16 @@
+{
+    "name": "lawyers-google-maps-scraper",
+    "version": "1.0.0",
+    "description": "Scrapes lawyers and law firms from Google Maps with email, social, practice-area, and firm-size enrichment",
+    "type": "module",
+    "main": "src/main.js",
+    "scripts": {
+        "start": "node src/main.js",
+        "dev":   "APIFY_LOCAL_STORAGE_DIR=./storage CRAWLEE_STORAGE_DIR=./storage node src/main.js"
+    },
+    "dependencies": {
+        "apify":   "^3.2.0",
+        "crawlee": "^3.8.0",
+        "playwright": "^1.44.0"
+    }
+}
