@@ -183,68 +183,121 @@ export async function extractLanguagesFromCurrentPage(page) {
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. SERVICES OFFERED — replaces menuHighlights
-// Source A: nothing on Maps for lawyers
-// Source B: scan the firm's website services / practice-area headings
+// 4. SERVICES OFFERED — keyword-based legal-services match against the firm's
+// website body text. The previous heading-scan approach (h2/h3/h4) caught
+// news headlines on news-heavy firm sites (e.g. Kreindler's "Kreindler News",
+// "Kreindler Named Transportation Law Firm of the Year"). High-precision
+// keyword matching against a curated legal-services dictionary avoids that.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SERVICE_BLOCKLIST = new Set([
-    // Generic page-section / nav labels
-    'menu', 'home', 'about', 'about us', 'contact', 'contact us',
-    'services', 'practice areas', 'attorneys', 'team', 'our team', 'our attorneys',
-    'blog', 'news', 'resources', 'testimonials', 'reviews',
-    'careers', 'jobs', 'gallery',
-    'hours', 'location', 'locations', 'find us', 'directions',
-    'privacy', 'terms', 'disclaimer', 'cookies',
-    'login', 'sign in',
-    'welcome', 'free consultation', 'schedule consultation',
-    // Form / CTA labels
-    'email', 'email signup', 'sign up', 'subscribe', 'newsletter',
-    // Day / time fragments (carried over from restaurants — same anti-leak)
-]);
+const LEGAL_SERVICE_KEYWORDS = {
+    // Personal Injury sub-services
+    'Car / Auto Accidents':       ['car accident', 'auto accident', 'automobile accident', 'motor vehicle accident'],
+    'Motorcycle Accidents':       ['motorcycle accident'],
+    'Truck Accidents':            ['truck accident', '18-wheeler', 'tractor trailer accident'],
+    'Bicycle Accidents':          ['bicycle accident', 'bike accident'],
+    'Pedestrian Accidents':       ['pedestrian accident'],
+    'Slip & Fall':                ['slip and fall', 'slip & fall', 'trip and fall'],
+    'Construction Accidents':     ['construction accident', 'scaffolding accident'],
+    'Premises Liability':         ['premises liability'],
+    'Wrongful Death':             ['wrongful death'],
+    'Dog Bites':                  ['dog bite', 'animal attack'],
+    'Brain / Head Injuries':      ['brain injury', 'traumatic brain injury', 'tbi', 'head injury', 'concussion'],
+    'Spinal Cord Injuries':       ['spinal cord injury', 'paralysis injury'],
+    'Burn Injuries':              ['burn injury'],
+    'Product Liability':          ['product liability', 'defective product'],
 
-const SERVICE_BLOCK_REGEX =
-    /(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon-|tue-|wed-|thu-|fri-|sat-|sun-)|\b\d{1,2}(:\d{2})?\s*(am|pm)\b/i;
+    // Family Law
+    'Divorce':                    ['divorce'],
+    'Child Custody':              ['child custody', 'custody dispute'],
+    'Child Support':              ['child support'],
+    'Spousal Support / Alimony':  ['alimony', 'spousal support', 'spousal maintenance'],
+    'Adoption':                   ['adoption'],
+    'Domestic Violence':          ['domestic violence', 'restraining order', 'order of protection'],
+    'Prenuptial Agreements':      ['prenuptial', 'prenup', 'postnuptial'],
+
+    // Criminal Defense
+    'DUI / DWI Defense':          ['dui defense', 'dwi defense', 'dui lawyer', 'dwi lawyer', 'driving under the influence'],
+    'Drug Charges':               ['drug charge', 'drug possession', 'drug trafficking'],
+    'Felony Defense':             ['felony defense', 'felony charge'],
+    'Misdemeanor Defense':        ['misdemeanor defense'],
+    'Theft / Burglary Defense':   ['theft defense', 'burglary defense', 'shoplifting'],
+    'Assault Defense':            ['assault defense', 'assault charge'],
+    'Sex Crimes Defense':         ['sex crime defense', 'sexual assault defense'],
+    'Juvenile Crimes':            ['juvenile crime', 'juvenile defense'],
+    'White Collar Crime':         ['white collar crime', 'white-collar crime'],
+
+    // Immigration
+    'Green Card / Permanent Residency': ['green card', 'permanent residency', 'permanent resident'],
+    'Citizenship / Naturalization':     ['citizenship', 'naturalization'],
+    'Asylum':                           ['asylum'],
+    'Deportation Defense':              ['deportation defense', 'removal defense'],
+    'Work Visa':                        ['h-1b', 'h1b', 'work visa', 'l-1 visa', 'o-1 visa'],
+    'Family-Based Immigration':         ['family-based immigration', 'family immigration', 'k-1 visa', 'fiancé visa'],
+    'DACA':                             ['daca'],
+
+    // Estate Planning
+    'Wills':                      ['will preparation', 'last will', 'will and testament'],
+    'Trusts':                     ['living trust', 'revocable trust', 'irrevocable trust', 'trust planning'],
+    'Probate':                    ['probate'],
+    'Estate Administration':      ['estate administration'],
+    'Power of Attorney':          ['power of attorney'],
+    'Healthcare Directives':      ['healthcare directive', 'advance directive', 'living will'],
+
+    // Real Estate
+    'Residential Real Estate':    ['residential real estate', 'home closing'],
+    'Commercial Real Estate':     ['commercial real estate'],
+    'Landlord / Tenant':          ['landlord tenant', 'landlord-tenant', 'eviction'],
+    'Foreclosure Defense':        ['foreclosure defense'],
+
+    // Employment
+    'Wrongful Termination':       ['wrongful termination'],
+    'Discrimination':             ['workplace discrimination', 'employment discrimination', 'race discrimination', 'gender discrimination', 'age discrimination', 'disability discrimination'],
+    'Harassment':                 ['workplace harassment', 'sexual harassment'],
+    'Wage & Hour':                ['wage and hour', 'unpaid wages', 'overtime claim'],
+    'FMLA':                       ['fmla', 'family medical leave'],
+    'Severance Negotiation':      ['severance negotiation', 'severance agreement'],
+
+    // Corporate / Business
+    'Business Formation':         ['business formation', 'llc formation', 'incorporation'],
+    'Contracts':                  ['contract drafting', 'contract review', 'business contract'],
+    'Mergers & Acquisitions':     ['mergers and acquisitions', 'm&a'],
+    'Commercial Litigation':      ['commercial litigation'],
+    'Partnership Disputes':       ['partnership dispute'],
+
+    // Bankruptcy
+    'Chapter 7 Bankruptcy':       ['chapter 7'],
+    'Chapter 11 Bankruptcy':      ['chapter 11'],
+    'Chapter 13 Bankruptcy':      ['chapter 13'],
+
+    // Intellectual Property
+    'Patent Law':                 ['patent law', 'patent application', 'patent attorney'],
+    'Trademark Law':              ['trademark law', 'trademark registration', 'trademark attorney'],
+    'Copyright Law':              ['copyright law', 'copyright infringement'],
+
+    // Other high-value verticals
+    'Workers Compensation':       ['workers compensation', 'workers comp', "workman's compensation"],
+    'Medical Malpractice':        ['medical malpractice', 'med mal'],
+    'Birth Injury':               ['birth injury'],
+    'Class Actions':              ['class action'],
+    'Mass Torts':                 ['mass tort'],
+    'Social Security Disability': ['social security disability', 'ssdi', 'ssi claim'],
+    'Tax Law':                    ['tax law', 'irs dispute', 'tax controversy'],
+    'Civil Rights':               ['civil rights', 'police brutality'],
+    'Nursing Home Abuse':         ['nursing home abuse', 'elder abuse'],
+};
 
 export async function extractServicesFromCurrentPage(page) {
-    return page.evaluate(({ blocklist, blockPatternSrc }) => {
-        const blocked   = new Set(blocklist);
-        const blockRe   = new RegExp(blockPatternSrc, 'i');
-
-        // Prefer service-list / practice-area selectors used by common law-firm
-        // CMS templates; fall back to generic headings.
-        const specific = [...document.querySelectorAll(
-            '.practice-area__title, .practice-areas li, .service-item__title, ' +
-            '.services-list li, [class*="practiceArea"] [class*="title"], ' +
-            '[class*="practiceArea"] [class*="name"], [class*="serviceItem"] [class*="title"]',
-        )];
-        const headings = specific.length
-            ? specific
-            : [...document.querySelectorAll('h2, h3, h4, h5')];
-
-        const seen = new Set();
-        const out  = [];
-        for (const el of headings) {
-            const raw = el.textContent?.replace(/\s+/g, ' ').trim();
-            if (!raw) continue;
-            if (raw.length < 3 || raw.length > 80) continue;
-
-            const lower = raw.toLowerCase();
-            if (blocked.has(lower)) continue;
-            if (blockRe.test(raw)) continue;
-            // Skip short ALL-CAPS labels like "FAQ", "ABOUT"
-            if (/^[A-Z\s&]+$/.test(raw) && raw.length < 12) continue;
-            if (seen.has(lower)) continue;
-
-            seen.add(lower);
-            out.push(raw);
-            if (out.length >= 12) break;
+    try {
+        const text = (await page.innerText('body')).toLowerCase();
+        const matched = [];
+        for (const [service, keywords] of Object.entries(LEGAL_SERVICE_KEYWORDS)) {
+            if (keywords.some(k => text.includes(k))) matched.push(service);
         }
-        return out.length >= 3 ? out : null;
-    }, {
-        blocklist: [...SERVICE_BLOCKLIST],
-        blockPatternSrc: SERVICE_BLOCK_REGEX.source,
-    }).catch(() => null);
+        return matched.length ? matched : null;
+    } catch {
+        return null;
+    }
 }
 
 
