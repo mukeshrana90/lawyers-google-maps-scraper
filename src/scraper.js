@@ -25,13 +25,17 @@ export async function scrapeMapResults(page, { maxResults, searchTerm, location 
     const seen    = new Set();
 
     const query = encodeURIComponent(`${searchTerm} in ${location}`);
-    const searchUrl = `https://www.google.com/maps/search/${query}`;
+    // hl=en + gl=us nudges Google toward English UI and US consent flow even
+    // when the proxy IP geolocates to the EU (where Maps would otherwise
+    // redirect to consent.google.com under GDPR).
+    const searchUrl = `https://www.google.com/maps/search/${query}?hl=en&gl=us`;
     log.info(`Navigating to: ${searchUrl}`);
     await navigateWithRetry(page, searchUrl, { timeout: 60_000, retries: 2 });
 
     log.info(`Page loaded: ${page.url()}`);
 
     await dismissConsent(page);
+    await acceptConsentRedirect(page);  // handles full-page consent.google.com redirect
 
     let placeUrls = await collectPlaceUrls(page, maxResults);
     if (placeUrls.length === 0) {
@@ -178,6 +182,55 @@ async function dismissConsent(page) {
             }
         }
     } catch { /* no consent dialog */ }
+}
+
+/**
+ * Handles the full-page consent.google.com redirect that Google triggers when
+ * a request comes from an EU-geolocated IP (datacenter proxies from EU regions
+ * are a common trigger). The page contains "Accept all" / "Reject all" /
+ * "Manage" buttons in the local language. We pick the Accept button by
+ * matching its text or aria-label against known patterns, click it, then
+ * wait to be redirected back to Maps.
+ */
+async function acceptConsentRedirect(page) {
+    const url = page.url();
+    if (!/consent\.(google|youtube)\.com/.test(url)) return;
+
+    log.info('Detected consent.google.com redirect — attempting to accept');
+
+    const acceptRegex = new RegExp(
+        'accept all|accept|allow all|i agree|i accept|'
+        + 'alle akzept|tout accept|accetta tutto|aceptar todo|aceitar tudo|'
+        + 'alles accepteren|godkänn alla|accepter alle|hyväksy kaikki',
+        'i',
+    );
+
+    const targetIndex = await page.evaluate((rxSrc) => {
+        const rx = new RegExp(rxSrc, 'i');
+        const buttons = [...document.querySelectorAll('button, [role="button"]')];
+        return buttons.findIndex(b => {
+            const text = (b.textContent || '').trim();
+            const aria = b.getAttribute('aria-label') || '';
+            return rx.test(text) || rx.test(aria);
+        });
+    }, acceptRegex.source).catch(() => -1);
+
+    if (targetIndex < 0) {
+        log.warning('Consent page: no Accept button matched any known language pattern');
+        return;
+    }
+
+    try {
+        await page.evaluate((i) => {
+            const buttons = [...document.querySelectorAll('button, [role="button"]')];
+            buttons[i]?.click();
+        }, targetIndex);
+        await page.waitForURL(/google\.com\/maps/, { timeout: 15_000 }).catch(() => {});
+        await page.waitForSelector('div[role="feed"], div[role="article"]', { timeout: 10_000 }).catch(() => {});
+        log.info(`Consent accepted, redirected to: ${page.url()}`);
+    } catch (e) {
+        log.warning(`Consent click/redirect failed: ${e.message}`);
+    }
 }
 
 async function extractPlaceDetail(page, { searchTerm, searchLocation }) {
