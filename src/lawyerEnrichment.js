@@ -388,7 +388,17 @@ export async function extractReviewSentiment(page) {
     }
 
     const reviews = await page.evaluate(() => {
-        const els = [...document.querySelectorAll('div[data-review-id]')].slice(0, 10);
+        // Dedupe by data-review-id — Google Maps sometimes renders the same
+        // review twice (e.g. as a featured highlight + in the main list).
+        const seenIds = new Set();
+        const els = [];
+        for (const el of document.querySelectorAll('div[data-review-id]')) {
+            const id = el.getAttribute('data-review-id');
+            if (!id || seenIds.has(id)) continue;
+            seenIds.add(id);
+            els.push(el);
+            if (els.length >= 10) break;
+        }
         return els.map(el => {
             const text = (
                 el.querySelector('span.wiI7pd')?.textContent
