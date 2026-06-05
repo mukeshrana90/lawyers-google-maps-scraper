@@ -58,7 +58,7 @@ export async function scrapeMapResults(page, { maxResults, searchTerm, location 
         if (results.length >= maxResults) break;
 
         try {
-            const reached = await navigateWithRetry(page, placeUrls[i], { timeout: 60_000, retries: 1 });
+            const reached = await navigateWithRetry(page, placeUrls[i], { timeout: 30_000, retries: 1 });
             if (!reached) {
                 log.warning(`Skipped place ${i}: navigation failed`);
                 continue;

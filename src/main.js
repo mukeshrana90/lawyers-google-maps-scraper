@@ -62,10 +62,16 @@ let totalScraped = 0;
 const crawler = new PlaywrightCrawler({
     requestQueue,
     proxyConfiguration: proxy,
-    maxRequestRetries: 3,
+    maxRequestRetries: 1,
     maxConcurrency: 1,
     requestHandlerTimeoutSecs: 900,
-    navigationTimeoutSecs: 90,
+    navigationTimeoutSecs: 60,
+
+    // Google Maps almost never reaches the default 'load' state cleanly
+    // (analytics / tiles keep streaming), so wait only for DOMContentLoaded.
+    preNavigationHooks: [
+        (_ctx, gotoOptions) => { gotoOptions.waitUntil = 'domcontentloaded'; },
+    ],
 
     launchContext: {
         launchOptions: {
