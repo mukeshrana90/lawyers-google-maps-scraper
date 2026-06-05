@@ -9,7 +9,7 @@
             "type": "array",
             "description": "Lawyer / attorney categories to search for (e.g. personal injury lawyer, immigration attorney, divorce lawyer, criminal defense, real estate attorney)",
             "editor": "stringList",
-            "prefill": ["personal injury lawyer", "immigration attorney"],
+            "prefill": ["personal injury lawyer"],
             "default": ["personal injury lawyer"],
             "sectionCaption": "Search settings",
             "sectionDescription": "Enter search terms and locations. Each search term is combined with each location."
@@ -27,7 +27,7 @@
             "type": "integer",
             "description": "Maximum number of lawyers / firms to scrape in total across all search term + location combinations",
             "default": 50,
-            "prefill": 20,
+            "prefill": 5,
             "minimum": 1,
             "maximum": 500
         },
