@@ -24,15 +24,11 @@ export async function scrapeMapResults(page, { maxResults, searchTerm, location 
     const results = [];
     const seen    = new Set();
 
-    const query = encodeURIComponent(`${searchTerm} in ${location}`);
-    // hl=en + gl=us nudges Google toward English UI and US consent flow even
-    // when the proxy IP geolocates to the EU (where Maps would otherwise
-    // redirect to consent.google.com under GDPR).
-    const searchUrl = `https://www.google.com/maps/search/${query}?hl=en&gl=us`;
-    log.info(`Navigating to: ${searchUrl}`);
-    await navigateWithRetry(page, searchUrl, { timeout: 60_000, retries: 2 });
-
-    log.info(`Page loaded: ${page.url()}`);
+    // Crawlee's PlaywrightCrawler already navigated to the queued search URL
+    // (which carries hl=en&gl=us from buildSearchUrls), so we just confirm the
+    // landing URL and handle consent flows here.
+    const searchUrl = page.url();
+    log.info(`Page loaded: ${searchUrl}`);
 
     await dismissConsent(page);
     await acceptConsentRedirect(page);  // handles full-page consent.google.com redirect
@@ -58,7 +54,7 @@ export async function scrapeMapResults(page, { maxResults, searchTerm, location 
         if (results.length >= maxResults) break;
 
         try {
-            const reached = await navigateWithRetry(page, placeUrls[i], { timeout: 30_000, retries: 1 });
+            const reached = await navigateWithRetry(page, placeUrls[i], { timeout: 20_000, retries: 1 });
             if (!reached) {
                 log.warning(`Skipped place ${i}: navigation failed`);
                 continue;

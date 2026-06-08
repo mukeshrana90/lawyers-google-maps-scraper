@@ -13,8 +13,11 @@ export function buildSearchUrls(searchTerms, locations) {
     for (const location of locations) {
         for (const term of searchTerms) {
             const q = encodeURIComponent(`${term} in ${location}`);
+            // hl=en + gl=us nudges Google toward English UI and US consent flow,
+            // matching what the scraper would build internally — having it on
+            // the queued URL lets us skip a redundant in-handler navigation.
             requests.push({
-                url:   `https://www.google.com/maps/search/${q}`,
+                url:   `https://www.google.com/maps/search/${q}?hl=en&gl=us`,
                 label: 'MAPS_SEARCH',
                 meta:  { term, location },
             });

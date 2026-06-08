@@ -63,7 +63,7 @@ const crawler = new PlaywrightCrawler({
     requestQueue,
     proxyConfiguration: proxy,
     maxRequestRetries: 1,
-    maxConcurrency: 1,
+    maxConcurrency: 2,
     requestHandlerTimeoutSecs: 900,
     navigationTimeoutSecs: 60,
 
