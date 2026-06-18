@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lawyers Google Maps Scraper — v2 Improvement Plan</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --card: #1a1d27;
+      --border: #2a2e3c;
+      --text: #e4e7ee;
+      --muted: #9aa3b2;
+      --accent: #6ea8fe;
+      --high: #ff6b6b;
+      --med: #ffc14d;
+      --low: #5cd6a0;
+      --code-bg: #0b0d13;
+      --code-text: #d7dce5;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 48px 24px 96px; }
+    header { border-bottom: 1px solid var(--border); padding-bottom: 24px; margin-bottom: 32px; }
+    h1 { font-size: 2rem; margin: 0 0 8px; }
+    h2 {
+      font-size: 1.35rem;
+      margin: 48px 0 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    h3 { font-size: 1.05rem; margin: 24px 0 8px; }
+    .subtitle { color: var(--muted); margin: 0; }
+    .meta { color: var(--muted); font-size: 0.85rem; margin-top: 12px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin: 16px 0;
+    }
+    .card.high { border-left: 4px solid var(--high); }
+    .card.med { border-left: 4px solid var(--med); }
+    .card.low { border-left: 4px solid var(--low); }
+    .badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 999px;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+    .badge.high { background: rgba(255,107,107,0.15); color: var(--high); }
+    .badge.med { background: rgba(255,193,77,0.15); color: var(--med); }
+    .badge.low { background: rgba(92,214,160,0.15); color: var(--low); }
+    code {
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      background: var(--code-bg);
+      color: var(--code-text);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.85em;
+    }
+    pre {
+      background: var(--code-bg);
+      color: var(--code-text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+    pre code { background: none; padding: 0; }
+    .file { color: var(--accent); font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 0.85em; }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
+    .sev { font-weight: 700; }
+    .sev.high { color: var(--high); }
+    .sev.med { color: var(--med); }
+    .sev.low { color: var(--low); }
+    .toc { columns: 2; column-gap: 32px; }
+    .toc a { color: var(--accent); text-decoration: none; display: block; padding: 3px 0; }
+    .toc a:hover { text-decoration: underline; }
+    p { margin: 8px 0; }
+    ul { margin: 8px 0; padding-left: 22px; }
+    li { margin: 4px 0; }
+    .note { color: var(--muted); font-size: 0.85rem; font-style: italic; }
+    .badge.done { background: rgba(92,214,160,0.18); color: var(--low); }
+    .status-banner {
+      background: linear-gradient(90deg, rgba(92,214,160,0.12), rgba(92,214,160,0.03));
+      border: 1px solid rgba(92,214,160,0.35);
+      border-left: 4px solid var(--low);
+      border-radius: 10px;
+      padding: 16px 24px;
+      margin: 16px 0 8px;
+    }
+    .status-banner h3 { margin: 0 0 6px; color: var(--low); }
+    .status-banner ul { margin: 6px 0 0; }
+    .card.shipped { opacity: 0.92; }
+    .card.shipped h3 { color: var(--low); }
+    footer { margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Lawyers Google Maps Scraper — v2 Improvement Plan</h1>
+      <p class="subtitle">Prioritized engineering suggestions from a full codebase analysis.</p>
+      <p class="meta">Generated 2026-06-18 · Branch <code>main</code> · Apify actor (Node.js / Playwright / Crawlee)</p>
+    </header>
+
+    <div class="status-banner">
+      <h3>✅ High-priority batch shipped — build 1.0.9 (2026-06-18)</h3>
+      <p style="margin:4px 0 0;">Items <strong>#1, #2, #3</strong> are implemented, deployed to Apify, and verified on a live platform run.</p>
+      <ul>
+        <li><strong>Deployed:</strong> <code>apify push</code> → build <code>1.0.9</code> built successfully on Apify cloud.</li>
+        <li><strong>Tested:</strong> live run (<em>personal injury lawyer</em>, Austin TX, all enrichments, <code>maxResults: 3</code>) — SUCCEEDED, 0 failed requests.</li>
+        <li><strong>#2 verified:</strong> dataset contained exactly 3 records — global cap held.</li>
+        <li><strong>#1 verified:</strong> email came back empty for all firms → <code>email-enrichment</code> correctly <em>not</em> charged.</li>
+        <li><strong>#3 verified:</strong> no website-unreachable failures; website-phase fields (practice areas, fees, services, sentiment) populated.</li>
+      </ul>
+    </div>
+
+    <section>
+      <h2 id="contents">Contents</h2>
+      <div class="toc card">
+        <a href="#high">🔴 High priority — money &amp; correctness</a>
+        <a href="#medium">🟡 Medium — reliability &amp; performance</a>
+        <a href="#low">🟢 Lower — robustness &amp; polish</a>
+        <a href="#summary">Summary table</a>
+        <a href="#rollout">Suggested rollout order</a>
+      </div>
+      <p class="note">A few items depend on exact runtime behavior that should be confirmed before changing — flagged inline where relevant.</p>
+    </section>
+
+    <!-- ===================== HIGH ===================== -->
+    <section>
+      <h2 id="high">🔴 High priority — money &amp; correctness</h2>
+
+      <div class="card high shipped">
+        <h3>1. PPE charges fire on <em>attempted</em>, not <em>successful</em>, enrichment <span class="badge high">High</span> <span class="badge done">✅ Done · 1.0.9</span></h3>
+        <p class="file">src/main.js</p>
+        <p>The charge loop pushes <code>email-enrichment</code>, <code>social-enrichment</code>, etc. based only on whether <code>place.website</code> exists — not on whether the enrichment actually returned data. If email extraction returns <code>null</code>, the customer is still billed. This is both a correctness bug and a trust/refund risk on the Apify Store.</p>
+        <p><strong>Fix:</strong> gate each charge on a real result.</p>
+        <pre><code>if (enrichEmails && place.email) charges.push('email-enrichment');
+if (enrichSocials && hasAnySocial(place)) charges.push('social-enrichment');
+if (enrichLawyer && place.practiceAreas?.length) charges.push('lawyer-enrichment');</code></pre>
+        <p class="note">Shipped with two extra guards: <code>feeStructure?.length</code> (an empty array is truthy in JS) and <code>firmSize !== 'unknown'</code> (firm-size classification always runs, so an "unknown" result must not bill).</p>
+      </div>
+
+      <div class="card high shipped">
+        <h3>2. <code>maxResults</code> can be exceeded under concurrency <span class="badge high">High</span> <span class="badge done">✅ Done · 1.0.9</span></h3>
+        <p class="file">src/main.js (with maxConcurrency: 2)</p>
+        <p>The counter is checked then incremented non-atomically across concurrent request handlers, and the scope (per-URL vs global) is ambiguous. N search URLs × <code>maxResults</code> can blow past the intended total.</p>
+        <p><strong>Fix:</strong> decide whether <code>maxResults</code> is a global cap. If so, track it on a shared object and stop enqueuing / break once hit. Document the scope clearly in the input schema.</p>
+      </div>
+
+      <div class="card high shipped">
+        <h3>3. Website navigation has no retry <span class="badge high">High</span> <span class="badge done">✅ Done · 1.0.9</span></h3>
+        <p class="file">src/main.js → page.goto(place.website, …)</p>
+        <p>Maps navigation uses <code>navigateWithRetry()</code>, but the website visit calls <code>page.goto</code> directly with a 15s timeout. A single timeout hard-fails that branch and can discard an otherwise-good Maps record.</p>
+        <p><strong>Fix:</strong> wrap the website goto in the same retry / partial-load handling, and never let a website failure throw away the Maps data already collected.</p>
+      </div>
+    </section>
+
+    <!-- ===================== MEDIUM ===================== -->
+    <section>
+      <h2 id="medium">🟡 Medium — reliability &amp; performance</h2>
+
+      <div class="card med">
+        <h3>4. Anti-detection patterns are too uniform <span class="badge med">Medium</span></h3>
+        <p class="file">src/scraper.js, src/main.js</p>
+        <p>Fixed <code>scrollBy(0, 800)</code> and a hardcoded <code>waitForTimeout(1500)</code> are exactly the uniformity Google flags as bot behavior.</p>
+        <p><strong>Fix:</strong> randomize scroll distance (e.g. 400–1200px) and replace fixed waits with jittered delays via the existing <code>randomDelay()</code> helper.</p>
+      </div>
+
+      <div class="card med">
+        <h3>5. Review-sentiment phase is the biggest cost driver <span class="badge med">Medium</span></h3>
+        <p class="file">src/lawyerEnrichment.js</p>
+        <p>Enabling it adds a <em>third</em> navigation per place (Maps overview → Reviews tab → website), plus ~4500px of scrolling and 10 "See more" clicks.</p>
+        <p><strong>Fix (confirm first):</strong> check whether the initial Maps detail load already exposes enough review text to skip the separate Reviews-tab navigation. If so, cache and reuse it.</p>
+      </div>
+
+      <div class="card med">
+        <h3>6. Brittle hardcoded selectors scattered across files <span class="badge med">Medium</span></h3>
+        <p class="file">src/scraper.js, src/lawyerEnrichment.js, src/main.js</p>
+        <p>Selectors like <code>span.wiI7pd</code>, <code>div[role="feed"]</code>, review-tab classes, and consent dialogs are duplicated (consent handling exists in both <code>main.js</code> and <code>scraper.js</code>).</p>
+        <p><strong>Fix:</strong> centralize them in one <code>selectors.js</code> with documented fallbacks. When Google changes a class, it becomes a one-file fix instead of a hunt.</p>
+      </div>
+
+      <div class="card med">
+        <h3>7. Validation gate is too permissive <span class="badge med">Medium</span></h3>
+        <p class="file">src/scraper.js</p>
+        <p>A place with only a name and no phone/website/email is accepted. For a lawyer lead list that record is near-useless.</p>
+        <p><strong>Fix:</strong> require at least one contact method (phone, website, or email) before pushing/charging.</p>
+      </div>
+    </section>
+
+    <!-- ===================== LOW ===================== -->
+    <section>
+      <h2 id="low">🟢 Lower — robustness &amp; polish</h2>
+
+      <div class="card low">
+        <h3>8. Input shape validation <span class="badge low">Low</span></h3>
+        <p class="file">src/main.js</p>
+        <p>A string <code>searchTerms</code> instead of an array silently iterates characters. Coerce/validate input shape at startup and fail loudly on bad input.</p>
+      </div>
+
+      <div class="card low">
+        <h3>9. Metro keyword fallback is loose <span class="badge low">Low</span></h3>
+        <p class="file">src/lawyerNiche.js</p>
+        <p>Substring-matching city names in the address means a suburb 150km out reads as "metro." Prefer the coordinate path; treat keyword matches as low-confidence.</p>
+      </div>
+
+      <div class="card low">
+        <h3>10. Unexplained magic numbers <span class="badge low">Low</span></h3>
+        <p class="file">src/main.js, src/scraper.js, src/lawyerNiche.js</p>
+        <p>Values like <code>staleRounds &gt;= 3</code>, <code>maxConcurrency: 2</code>, and review thresholds <code>2000 / 500 / 50</code> should be named constants with a one-line rationale each.</p>
+      </div>
+
+      <div class="card low">
+        <h3>11. No test or lint setup <span class="badge low">Low</span></h3>
+        <p class="file">package.json</p>
+        <p>There is no test/lint tooling today. A few unit tests on the pure-compute functions (<code>classifyFirmSize</code>, email scoring, sentiment) would catch regressions cheaply and run without a browser.</p>
+      </div>
+
+      <div class="card low">
+        <h3>12. Other notes <span class="badge low">Low</span></h3>
+        <ul>
+          <li>Language normalization fallback keeps original casing when a keyword isn't in the normalize map — can emit <code>GERMAN</code> instead of <code>German</code>.</li>
+          <li><code>applyFirmSizeClassification()</code> both mutates and returns <code>enriched</code> but callers ignore the return — make it consistent.</li>
+          <li>Booking-platform detection relies on substring matching of footer links; it can report Calendly when the live form is something else. Validate against the active DOM.</li>
+          <li>Email regex scans the entire HTML with no size guard — add a length cap for very large pages.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ===================== SUMMARY ===================== -->
+    <section>
+      <h2 id="summary">Summary table</h2>
+      <table>
+        <thead>
+          <tr><th>#</th><th>Issue</th><th>Area</th><th>Severity</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>Charges fire on failed enrichment</td><td>Billing</td><td class="sev high">High</td><td class="sev low">✅ 1.0.9</td></tr>
+          <tr><td>2</td><td>maxResults exceeded under concurrency</td><td>Correctness</td><td class="sev high">High</td><td class="sev low">✅ 1.0.9</td></tr>
+          <tr><td>3</td><td>Website navigation has no retry</td><td>Reliability</td><td class="sev high">High</td><td class="sev low">✅ 1.0.9</td></tr>
+          <tr><td>4</td><td>Uniform scroll/delay patterns</td><td>Anti-detection</td><td class="sev med">Medium</td><td class="note">Planned</td></tr>
+          <tr><td>5</td><td>Review sentiment = 3rd nav + heavy scroll</td><td>Performance</td><td class="sev med">Medium</td><td class="note">Planned</td></tr>
+          <tr><td>6</td><td>Brittle / duplicated selectors</td><td>Maintainability</td><td class="sev med">Medium</td><td class="note">Planned</td></tr>
+          <tr><td>7</td><td>Validation gate too permissive</td><td>Correctness</td><td class="sev med">Medium</td><td class="note">Planned</td></tr>
+          <tr><td>8</td><td>No input shape validation</td><td>Input</td><td class="sev low">Low</td><td class="note">Planned</td></tr>
+          <tr><td>9</td><td>Metro keyword fallback loose</td><td>Correctness</td><td class="sev low">Low</td><td class="note">Planned</td></tr>
+          <tr><td>10</td><td>Unexplained magic numbers</td><td>Maintainability</td><td class="sev low">Low</td><td class="note">Planned</td></tr>
+          <tr><td>11</td><td>No test/lint setup</td><td>Tooling</td><td class="sev low">Low</td><td class="note">Planned</td></tr>
+          <tr><td>12</td><td>Misc polish (casing, mutation, regex guard)</td><td>Robustness</td><td class="sev low">Low</td><td class="note">Planned</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ===================== ROLLOUT ===================== -->
+    <section>
+      <h2 id="rollout">Suggested rollout order</h2>
+      <div class="card">
+        <p>Start with <strong>#1 (billing)</strong> and <strong>#3 (website retry)</strong> — small, safe, and directly affecting revenue and output quality. They make a tight first PR.</p>
+        <ol>
+          <li><strong>PR 1 — Revenue &amp; quality:</strong> charge-on-success (#1) + website retry (#3). <span class="badge done">✅ Shipped in build 1.0.9</span> <span class="note">(validation gate #7 deferred to a later PR)</span></li>
+          <li><strong>PR 2 — maxResults semantics (#2):</strong> define and enforce global vs per-URL cap; update input schema docs.</li>
+          <li><strong>PR 3 — Resilience:</strong> centralize selectors (#6) + jittered anti-detection (#4).</li>
+          <li><strong>PR 4 — Cost:</strong> investigate review-sentiment nav reuse (#5).</li>
+          <li><strong>PR 5 — Polish:</strong> input validation (#8), metro confidence (#9), magic-number constants (#10), tests (#11), misc (#12).</li>
+        </ol>
+      </div>
+    </section>
+
+    <footer>
+      Lawyers Google Maps Scraper · v2 improvement plan · Internal engineering doc.
+    </footer>
+  </div>
+</body>
+</html>

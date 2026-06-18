@@ -15,7 +15,7 @@ import {
     detectBookingFromCurrentWebsite,
     detectFreeConsultFromCurrentWebsite,
 } from './lawyerNiche.js';
-import { buildSearchUrls, log, navigateWithRetry } from './utils.js';
+import { buildSearchUrls, log, navigateWithRetry, randomDelay } from './utils.js';
 
 await Actor.init();
 
@@ -108,15 +108,20 @@ const crawler = new PlaywrightCrawler({
             crawlLog.info(`Found ${places.length} places`);
 
             for (const place of places) {
-                if (totalScraped >= maxResults) {
-                    crawlLog.info('Max results reached — stopping.');
-                    break;
-                }
-
                 if (seen.has(place.placeId)) continue;
                 seen.add(place.placeId);
 
                 if (minRating > 0 && place.rating < minRating) continue;
+
+                // Reserve a result slot synchronously — before any `await` below —
+                // so concurrent request handlers can't both pass the cap check and
+                // overshoot. `maxResults` is a GLOBAL limit across every
+                // term × location search, not a per-search limit.
+                if (totalScraped >= maxResults) {
+                    crawlLog.info('Max results reached — stopping.');
+                    break;
+                }
+                totalScraped++;
 
                 let enriched = { ...place };
 
@@ -155,8 +160,12 @@ const crawler = new PlaywrightCrawler({
 
                 if (needsWebsite) {
                     try {
-                        await page.goto(place.website, { waitUntil: 'domcontentloaded', timeout: 15_000 });
-                        await page.waitForTimeout(1500);
+                        // Use the same retry / partial-load strategy as Maps nav so a
+                        // single slow website doesn't discard the Maps record we already
+                        // have. `ok === false` means every attempt hit a hard error.
+                        const ok = await navigateWithRetry(page, place.website, { timeout: 15_000, retries: 1 });
+                        if (!ok) throw new Error('website unreachable');
+                        await randomDelay(1000, 2000);
 
                         const html = await page.content();
 
@@ -215,14 +224,34 @@ const crawler = new PlaywrightCrawler({
                 }
 
                 await Dataset.pushData(toOutputSchema(enriched, { enrichEmails, enrichSocials, enrichLawyer, enrichLawyerNiche }));
-                totalScraped++;
 
-                // Per-enrichment PPE charges. No-op if PPE isn't configured.
+                // Per-enrichment PPE charges. Bill ONLY when the enrichment actually
+                // produced data — never on an empty or failed attempt. No-op if PPE
+                // isn't configured.
                 const charges = [];
-                if (enrichEmails       && place.website) charges.push('email-enrichment');
-                if (enrichSocials      && place.website) charges.push('social-enrichment');
-                if (enrichLawyer)                        charges.push('lawyer-enrichment');
-                if (enrichLawyerNiche)                   charges.push('niche-enrichment');
+                if (enrichEmails && enriched.email) {
+                    charges.push('email-enrichment');
+                }
+                if (enrichSocials && (enriched.instagram || enriched.facebook || enriched.linkedin || enriched.twitter)) {
+                    charges.push('social-enrichment');
+                }
+                if (enrichLawyer && (
+                    enriched.practiceAreas?.length
+                    || enriched.feeStructure?.length
+                    || enriched.languagesSpoken?.length
+                    || enriched.servicesOffered?.length
+                    || enriched.reviewSentiment
+                )) {
+                    charges.push('lawyer-enrichment');
+                }
+                if (enrichLawyerNiche && (
+                    enriched.hasOnlineBooking
+                    || enriched.hasFreeConsultation
+                    || enriched.isMetroArea
+                    || (enriched.firmSize && enriched.firmSize !== 'unknown')
+                )) {
+                    charges.push('niche-enrichment');
+                }
                 for (const eventName of charges) {
                     await Actor.charge({ eventName }).catch(e =>
                         crawlLog.warning(`charge ${eventName} failed: ${e.message}`),
