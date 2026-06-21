@@ -401,11 +401,14 @@ async function openReviewsTab(page) {
         'button[data-tab-index="1"]',
     ];
 
-    for (let attempt = 0; attempt < 3; attempt++) {
+    // Two attempts only: a place whose review cards haven't streamed in within
+    // this window is almost always a hung reviews fetch, which a fresh page load
+    // (the caller's reload-retry) handles far better than waiting longer here.
+    for (let attempt = 0; attempt < 2; attempt++) {
         let clicked = false;
         for (const sel of tabSelectors) {
             const btn = page.locator(sel).first();
-            if (await btn.isVisible({ timeout: 2500 }).catch(() => false)) {
+            if (await btn.isVisible({ timeout: 2000 }).catch(() => false)) {
                 await btn.click().catch(() => {});
                 clicked = true;
                 break;
@@ -413,7 +416,7 @@ async function openReviewsTab(page) {
         }
         if (!clicked) {
             const byRole = page.getByRole('tab', { name: /review/i }).first();
-            if (await byRole.isVisible({ timeout: 2500 }).catch(() => false)) {
+            if (await byRole.isVisible({ timeout: 2000 }).catch(() => false)) {
                 await byRole.click().catch(() => {});
                 clicked = true;
             }
@@ -426,14 +429,14 @@ async function openReviewsTab(page) {
         const ok = await page
             .waitForFunction(
                 () => document.querySelectorAll('div[data-review-id]').length > 0,
-                { timeout: 8000 },
+                { timeout: 6000 },
             )
             .then(() => true)
             .catch(() => false);
         if (ok) return true;
 
         // Tab not ready / click didn't register — brief backoff and retry.
-        await page.waitForTimeout(700);
+        await page.waitForTimeout(600);
     }
 
     // Last resort: featured reviews are sometimes already on the Overview tab.
@@ -441,18 +444,37 @@ async function openReviewsTab(page) {
 }
 
 export async function extractReviewSentiment(page, tag) {
-    const reviewsReady = await openReviewsTab(page);
-    if (!reviewsReady) {
-        await captureReviewDebug(page, `${tag}__tabfail`);
-        return null;
+    let reviews = await collectReviews(page);
+
+    // The reviews list sometimes hangs on a loading spinner: the histogram
+    // renders but Google never streams the review cards on that session. A fresh
+    // page load usually re-triggers the fetch successfully, so retry once on
+    // empty — this is what reclaims most of the otherwise-throttled places.
+    if (!reviews.length) {
+        try {
+            await page.reload({ waitUntil: 'domcontentloaded', timeout: 20_000 });
+        } catch { /* partial reload is fine — openReviewsTab waits for cards */ }
+        reviews = await collectReviews(page);
     }
 
-    // Accumulate review cards across gentle scroll steps, keyed by review id.
-    // The review list is virtualized: scrolling unloads off-screen cards and the
-    // re-fetch can be slow/blocked on proxies, so a scroll-then-extract approach
-    // loses the very cards it just loaded. Instead we extract what's visible
-    // FIRST (the initial batch, before any scroll), then scroll one viewport,
-    // extract again, and merge — so virtualization can never drop captured data.
+    if (!reviews.length) {
+        await captureReviewDebug(page, `${tag}__noreviews`);
+        return null;
+    }
+    return analyseReviews(reviews);
+}
+
+/**
+ * Opens the Reviews tab and accumulates up to 10 review cards, keyed by review
+ * id. Critically, it extracts what's visible BEFORE each scroll: the review
+ * list is virtualized, so scrolling unloads off-screen cards and the re-fetch
+ * can be slow on proxies — extract-then-scroll-then-merge means virtualization
+ * can never drop cards we've already captured. Returns [] if the tab yields no
+ * review cards (e.g. the reviews fetch hung on a spinner).
+ */
+async function collectReviews(page) {
+    if (!(await openReviewsTab(page))) return [];
+
     const extractVisible = () => page.evaluate(() => {
         const out = [];
         for (const el of document.querySelectorAll('div[data-review-id]')) {
@@ -501,13 +523,7 @@ export async function extractReviewSentiment(page, tag) {
         }).catch(() => {});
         await page.waitForTimeout(700);
     }
-
-    const reviews = [...collected.values()].slice(0, 10);
-    if (!reviews.length) {
-        await captureReviewDebug(page, `${tag}__noreviews`);
-        return null;
-    }
-    return analyseReviews(reviews);
+    return [...collected.values()].slice(0, 10);
 }
 
 function analyseReviews(reviews) {
