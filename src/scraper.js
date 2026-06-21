@@ -20,7 +20,7 @@ const DETAIL_HEADING_CSS = DETAIL_HEADING_SELECTORS.join(', ');
  * then visit each URL directly. This avoids the fragile click/back cycle
  * where the DOM rebuilds and nth() locators go stale.
  */
-export async function scrapeMapResults(page, { maxResults, searchTerm, location }) {
+export async function scrapeMapResults(page, { maxResults, searchTerm, location, deadline = Infinity }) {
     const results = [];
     const seen    = new Set();
 
@@ -52,15 +52,13 @@ export async function scrapeMapResults(page, { maxResults, searchTerm, location 
 
     for (let i = 0; i < placeUrls.length; i++) {
         if (results.length >= maxResults) break;
+        if (Date.now() >= deadline) {
+            log.warning(`Run deadline reached — stopping after ${results.length} scraped (${placeUrls.length - i} place(s) left)`);
+            break;
+        }
 
         try {
-            const reached = await navigateWithRetry(page, placeUrls[i], { timeout: 20_000, retries: 1 });
-            if (!reached) {
-                log.warning(`Skipped place ${i}: navigation failed`);
-                continue;
-            }
-
-            const detailLoaded = await waitForDetailPanel(page);
+            const detailLoaded = await openPlaceDetail(page, placeUrls[i], deadline);
             if (!detailLoaded) {
                 log.warning(`Skipped place ${i}: detail panel did not load`);
                 continue;
@@ -124,7 +122,11 @@ async function collectPlaceUrls(page, maxResults) {
         await page.waitForTimeout(600 + Math.random() * 400);
     }
 
-    log.info(`Scrolled to ${prevCount} place links`);
+    const finalCount = await page.$$eval(
+        'div[role="feed"] a[href*="/maps/place/"]',
+        els => els.length,
+    );
+    log.info(`Scrolled to ${finalCount} place links`);
 
     return page.$$eval(
         'div[role="feed"] a[href*="/maps/place/"]',
@@ -145,11 +147,34 @@ async function collectPlaceUrls(page, maxResults) {
     );
 }
 
-async function waitForDetailPanel(page) {
+/**
+ * Navigates to a place URL and waits for its detail panel to render.
+ *
+ * Direct navigation to a /maps/place/ URL re-bootstraps the whole Maps SPA,
+ * which is heavy on residential proxies — `page.goto` frequently times out
+ * even though the panel renders a moment later. So the *detail-panel selector*
+ * (not the navigation promise) is the real readiness signal: we swallow nav
+ * errors and let the selector wait decide. One retry covers transient blocks,
+ * and every attempt is bounded by the global run deadline so a dead place can
+ * never run us into the platform timeout.
+ */
+async function openPlaceDetail(page, url, deadline = Infinity) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+        if (Date.now() >= deadline) return false;
+        try {
+            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20_000 });
+        } catch { /* partial load is fine — the selector wait below decides */ }
+
+        if (await waitForDetailPanel(page, 9_000)) return true;
+    }
+    return false;
+}
+
+async function waitForDetailPanel(page, timeout = 9_000) {
     try {
         await Promise.any(
             DETAIL_HEADING_SELECTORS.map(sel =>
-                page.waitForSelector(sel, { timeout: 5_000 }),
+                page.waitForSelector(sel, { timeout }),
             ),
         );
         return true;

@@ -55,6 +55,17 @@ for (const { url, label, meta } of searchUrls) {
 
 log.info(`Queued ${searchUrls.length} search(es) across ${locations.length} location(s)`);
 
+// ── Run deadline ─────────────────────────────────────────────────────────────
+// Apify exposes when the platform will hard-abort the run. We stop work a little
+// before that so partial results are always flushed instead of being killed
+// mid-place. Falls back to "no deadline" when running locally.
+const timeoutAtRaw = process.env.ACTOR_TIMEOUT_AT || process.env.APIFY_TIMEOUT_AT;
+const timeoutAt = timeoutAtRaw ? new Date(timeoutAtRaw).getTime() : null;
+const deadline = timeoutAt && !Number.isNaN(timeoutAt) ? timeoutAt - 45_000 : Infinity;
+if (deadline !== Infinity) {
+    log.info(`Run deadline set ~${Math.round((deadline - Date.now()) / 1000)}s from now (45s before platform timeout)`);
+}
+
 // ── Results store (dedup by placeId) ─────────────────────────────────────────
 const seen = new Set();
 let totalScraped = 0;
@@ -103,11 +114,16 @@ const crawler = new PlaywrightCrawler({
                 maxResults,
                 searchTerm: meta.term,
                 location:   meta.location,
+                deadline,
             });
 
             crawlLog.info(`Found ${places.length} places`);
 
             for (const place of places) {
+                if (Date.now() >= deadline) {
+                    crawlLog.warning('Run deadline reached — flushing results and stopping enrichment.');
+                    break;
+                }
                 if (seen.has(place.placeId)) continue;
                 seen.add(place.placeId);
 
@@ -130,7 +146,7 @@ const crawler = new PlaywrightCrawler({
                 // latter clicks the Reviews tab.
                 if (enrichLawyer || enrichLawyerNiche) {
                     try {
-                        await navigateWithRetry(page, place.mapsUrl, { timeout: 60_000, retries: 2 });
+                        await navigateWithRetry(page, place.mapsUrl, { timeout: 25_000, retries: 1 });
                         await Promise.race([
                             page.waitForSelector('h1.DUwDvf',          { timeout: 10_000 }),
                             page.waitForSelector('h1.fontHeadlineLarge',{ timeout: 10_000 }),
