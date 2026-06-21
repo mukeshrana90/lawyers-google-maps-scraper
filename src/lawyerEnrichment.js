@@ -419,9 +419,15 @@ async function openReviewsTab(page) {
             }
         }
 
-        // Confirm the reviews list actually rendered before giving up.
+        // Confirm ACTUAL review cards rendered — not just the tab/histogram.
+        // Google loads the rating histogram first and streams the review cards
+        // (div[data-review-id]) in a beat later, so we must wait for a real
+        // node to exist, not a container class that matches the header.
         const ok = await page
-            .waitForSelector('div[data-review-id], div.jftiEf', { timeout: 6000 })
+            .waitForFunction(
+                () => document.querySelectorAll('div[data-review-id]').length > 0,
+                { timeout: 8000 },
+            )
             .then(() => true)
             .catch(() => false);
         if (ok) return true;
@@ -441,15 +447,34 @@ export async function extractReviewSentiment(page, tag) {
         return null;
     }
 
+    // Lazy-load a batch of review cards. Google streams them in as you scroll,
+    // so we scroll the ACTUAL scrollable ancestor of the review nodes (found by
+    // walking up from a card, rather than a guessed class that goes stale) in
+    // gentle steps and wait for the node count to grow. Extracting without this
+    // yields zero cards even though the histogram is already on screen.
     try {
-        await page.evaluate(() => {
-            const pane = document.querySelector('div[role="main"] div.m6QErb.DxyBCb, div.dS8AEf')
-                || document.querySelector('div[data-review-id]')?.closest('div.m6QErb');
-            if (pane) {
-                for (let i = 0; i < 3; i++) pane.scrollBy(0, 1500);
+        await page.evaluate(async () => {
+            const sleep = ms => new Promise(r => setTimeout(r, ms));
+            const findScroller = () => {
+                let el = document.querySelector('div[data-review-id]');
+                while (el && el !== document.body) {
+                    const oy = getComputedStyle(el).overflowY;
+                    if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 40) return el;
+                    el = el.parentElement;
+                }
+                return document.querySelector('div[role="main"]');
+            };
+            for (let i = 0; i < 10; i++) {
+                const before = document.querySelectorAll('div[data-review-id]').length;
+                if (before >= 10) break;
+                const sc = findScroller();
+                if (sc) sc.scrollBy(0, Math.max(900, sc.clientHeight * 0.9));
+                await sleep(650);
+                const after = document.querySelectorAll('div[data-review-id]').length;
+                if (after === before && i >= 3) break;   // no more loading — stop
             }
         });
-        await page.waitForTimeout(1000);
+        await page.waitForTimeout(400);
     } catch { /* keep going */ }
 
     const moreButtons = await page.$$('button[aria-label="See more"], button.w8nwRe');
