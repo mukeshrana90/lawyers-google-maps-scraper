@@ -447,54 +447,17 @@ export async function extractReviewSentiment(page, tag) {
         return null;
     }
 
-    // Lazy-load a batch of review cards. Google streams them in as you scroll,
-    // so we scroll the ACTUAL scrollable ancestor of the review nodes (found by
-    // walking up from a card, rather than a guessed class that goes stale) in
-    // gentle steps and wait for the node count to grow. Extracting without this
-    // yields zero cards even though the histogram is already on screen.
-    try {
-        await page.evaluate(async () => {
-            const sleep = ms => new Promise(r => setTimeout(r, ms));
-            const findScroller = () => {
-                let el = document.querySelector('div[data-review-id]');
-                while (el && el !== document.body) {
-                    const oy = getComputedStyle(el).overflowY;
-                    if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 40) return el;
-                    el = el.parentElement;
-                }
-                return document.querySelector('div[role="main"]');
-            };
-            for (let i = 0; i < 10; i++) {
-                const before = document.querySelectorAll('div[data-review-id]').length;
-                if (before >= 10) break;
-                const sc = findScroller();
-                if (sc) sc.scrollBy(0, Math.max(900, sc.clientHeight * 0.9));
-                await sleep(650);
-                const after = document.querySelectorAll('div[data-review-id]').length;
-                if (after === before && i >= 3) break;   // no more loading — stop
-            }
-        });
-        await page.waitForTimeout(400);
-    } catch { /* keep going */ }
-
-    const moreButtons = await page.$$('button[aria-label="See more"], button.w8nwRe');
-    for (const btn of moreButtons.slice(0, 10)) {
-        try { await btn.click(); await page.waitForTimeout(150); } catch { /* skip */ }
-    }
-
-    const reviews = await page.evaluate(() => {
-        // Dedupe by data-review-id — Google Maps sometimes renders the same
-        // review twice (e.g. as a featured highlight + in the main list).
-        const seenIds = new Set();
-        const els = [];
+    // Accumulate review cards across gentle scroll steps, keyed by review id.
+    // The review list is virtualized: scrolling unloads off-screen cards and the
+    // re-fetch can be slow/blocked on proxies, so a scroll-then-extract approach
+    // loses the very cards it just loaded. Instead we extract what's visible
+    // FIRST (the initial batch, before any scroll), then scroll one viewport,
+    // extract again, and merge — so virtualization can never drop captured data.
+    const extractVisible = () => page.evaluate(() => {
+        const out = [];
         for (const el of document.querySelectorAll('div[data-review-id]')) {
             const id = el.getAttribute('data-review-id');
-            if (!id || seenIds.has(id)) continue;
-            seenIds.add(id);
-            els.push(el);
-            if (els.length >= 10) break;
-        }
-        return els.map(el => {
+            if (!id) continue;
             const text = (
                 el.querySelector('span.wiI7pd')?.textContent
                 ?? el.querySelector('.MyEned span')?.textContent
@@ -503,12 +466,43 @@ export async function extractReviewSentiment(page, tag) {
             ).trim();
             const ratingEl = el.querySelector('span[role="img"][aria-label*="star" i]')
                 || el.querySelector('span.kvMYJc');
-            const ratingLabel = ratingEl?.getAttribute('aria-label') ?? '';
-            const m = ratingLabel.match(/([\d.]+)/);
-            return { text, rating: m ? parseFloat(m[1]) : 0 };
-        }).filter(r => r.text.length > 5);
-    });
+            const m = (ratingEl?.getAttribute('aria-label') ?? '').match(/([\d.]+)/);
+            out.push({ id, text, rating: m ? parseFloat(m[1]) : 0 });
+        }
+        return out;
+    }).catch(() => []);
 
+    const collected = new Map();
+    for (let step = 0; step < 8 && collected.size < 10; step++) {
+        // Expand any "See more" links currently in view so full text is captured.
+        const moreBtns = await page.$$('button[aria-label="See more"], button.w8nwRe');
+        for (const b of moreBtns.slice(0, 10)) {
+            try { await b.click(); await page.waitForTimeout(80); } catch { /* skip */ }
+        }
+
+        for (const r of await extractVisible()) {
+            if (r.text.length > 5 && !collected.has(r.id)) collected.set(r.id, r);
+        }
+        if (collected.size >= 10) break;
+
+        // Gentle one-viewport scroll of the reviews' scrollable ancestor to pull
+        // in the next batch; we re-extract on the next iteration before scrolling
+        // again, so anything unloaded here is already saved.
+        await page.evaluate(() => {
+            let el = document.querySelector('div[data-review-id]');
+            while (el && el !== document.body) {
+                const oy = getComputedStyle(el).overflowY;
+                if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 40) {
+                    el.scrollBy(0, el.clientHeight);
+                    return;
+                }
+                el = el.parentElement;
+            }
+        }).catch(() => {});
+        await page.waitForTimeout(700);
+    }
+
+    const reviews = [...collected.values()].slice(0, 10);
     if (!reviews.length) {
         await captureReviewDebug(page, `${tag}__noreviews`);
         return null;
