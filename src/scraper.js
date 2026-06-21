@@ -1,5 +1,7 @@
 import { log, navigateWithRetry } from './utils.js';
 import { Actor } from 'apify';
+import { enrichLawyerFields } from './lawyerEnrichment.js';
+import { applyLawyerNicheFilters } from './lawyerNiche.js';
 
 // Multiple selectors for the place detail heading — Google uses different
 // class names across regions, devices, and A/B tests
@@ -20,7 +22,10 @@ const DETAIL_HEADING_CSS = DETAIL_HEADING_SELECTORS.join(', ');
  * then visit each URL directly. This avoids the fragile click/back cycle
  * where the DOM rebuilds and nth() locators go stale.
  */
-export async function scrapeMapResults(page, { maxResults, searchTerm, location, deadline = Infinity }) {
+export async function scrapeMapResults(page, {
+    maxResults, searchTerm, location, deadline = Infinity,
+    enrichLawyer = false, enrichLawyerNiche = false,
+}) {
     const results = [];
     const seen    = new Set();
 
@@ -74,11 +79,28 @@ export async function scrapeMapResults(page, { maxResults, searchTerm, location,
             }
 
             const dedupeKey = place.placeId ?? place.name;
-            if (!seen.has(dedupeKey)) {
-                seen.add(dedupeKey);
-                results.push(place);
-                log.info(`Scraped ${results.length}/${maxResults}: ${place.name}`);
+            if (seen.has(dedupeKey)) continue;
+            seen.add(dedupeKey);
+
+            // ── Maps-Overview enrichment ─────────────────────────────────────
+            // Runs HERE, on the place page we just loaded and extracted from,
+            // instead of re-navigating to the same URL again in main.js. That
+            // re-nav doubled Maps loads (amplifying Google's throttling) and was
+            // where review-sentiment kept failing on partially-loaded pages.
+            // Niche detection runs first because lawyer enrichment clicks the
+            // Reviews tab and leaves the panel there.
+            let enriched = place;
+            if (enrichLawyerNiche || enrichLawyer) {
+                try {
+                    if (enrichLawyerNiche) enriched = await applyLawyerNicheFilters(page, enriched);
+                    if (enrichLawyer)      enriched = await enrichLawyerFields(page, enriched);
+                } catch (e) {
+                    log.warning(`Maps enrichment failed for ${place.name}: ${e.message}`);
+                }
             }
+
+            results.push(enriched);
+            log.info(`Scraped ${results.length}/${maxResults}: ${enriched.name}`);
         } catch (e) {
             log.warning(`Skipped place ${i}: ${e.message}`);
         }

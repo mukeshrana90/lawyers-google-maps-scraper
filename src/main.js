@@ -3,14 +3,12 @@ import { PlaywrightCrawler, Dataset, RequestQueue } from 'crawlee';
 import { scrapeMapResults } from './scraper.js';
 import { extractBestEmail, extractSocialLinks, tryContactPage } from './enricher.js';
 import {
-    enrichLawyerFields,
     extractPracticeAreasFromCurrentPage,
     extractFeeStructureFromCurrentPage,
     extractLanguagesFromCurrentPage,
     extractServicesFromCurrentPage,
 } from './lawyerEnrichment.js';
 import {
-    applyLawyerNicheFilters,
     applyFirmSizeClassification,
     detectBookingFromCurrentWebsite,
     detectFreeConsultFromCurrentWebsite,
@@ -115,6 +113,8 @@ const crawler = new PlaywrightCrawler({
                 searchTerm: meta.term,
                 location:   meta.location,
                 deadline,
+                enrichLawyer,
+                enrichLawyerNiche,
             });
 
             crawlLog.info(`Found ${places.length} places`);
@@ -139,33 +139,12 @@ const crawler = new PlaywrightCrawler({
                 }
                 totalScraped++;
 
+                // Maps-Overview enrichment (niche detection, practice areas,
+                // languages, review sentiment) already ran inside the scraper,
+                // on each place's freshly-loaded page — no re-navigation here.
                 let enriched = { ...place };
 
-                // ── PHASE 1: Maps Overview tab ────────────────────────────────
-                // Niche detection runs BEFORE lawyer enrichment because the
-                // latter clicks the Reviews tab.
-                if (enrichLawyer || enrichLawyerNiche) {
-                    try {
-                        await navigateWithRetry(page, place.mapsUrl, { timeout: 25_000, retries: 1 });
-                        await Promise.race([
-                            page.waitForSelector('h1.DUwDvf',          { timeout: 10_000 }),
-                            page.waitForSelector('h1.fontHeadlineLarge',{ timeout: 10_000 }),
-                            page.waitForSelector('div[role="main"] h1',{ timeout: 10_000 }),
-                            page.waitForSelector('h1',                 { timeout: 10_000 }),
-                        ]).catch(() => {});
-
-                        if (enrichLawyerNiche) {
-                            enriched = await applyLawyerNicheFilters(page, enriched);
-                        }
-                        if (enrichLawyer) {
-                            enriched = await enrichLawyerFields(page, enriched);
-                        }
-                    } catch (e) {
-                        crawlLog.warning(`Maps enrichment failed for ${place.name}: ${e.message}`);
-                    }
-                }
-
-                // ── PHASE 2: Single firm-website visit ────────────────────────
+                // ── PHASE 1: Single firm-website visit ────────────────────────
                 const needsWebsite = place.website && (
                     enrichEmails || enrichSocials
                     || (enrichLawyer       && !enriched.practiceAreas)
@@ -234,7 +213,7 @@ const crawler = new PlaywrightCrawler({
                     }
                 }
 
-                // ── PHASE 3: Firm-size classification (pure compute) ──────────
+                // ── PHASE 2: Firm-size classification (pure compute) ──────────
                 if (enrichLawyerNiche) {
                     applyFirmSizeClassification(enriched);
                 }

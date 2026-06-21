@@ -18,10 +18,12 @@ Apify actor that scrapes lawyers and law firms from Google Maps and enriches the
 
 ```
 src/
-  main.js              — Entry point: 3-phase orchestrator (Maps overview → Single
-                          website visit → Pure-compute classification)
-  scraper.js           — Google Maps scraping: scroll results, click listings,
-                          extract place details (universal Maps logic)
+  main.js              — Entry point: orchestrates the per-place website-visit
+                          and pure-compute classification phases
+  scraper.js           — Google Maps scraping: scroll results, visit each place,
+                          extract details AND run Maps-Overview enrichment
+                          (niche detection + lawyer fields incl. review
+                          sentiment) on the same freshly-loaded page
   enricher.js          — Pure HTML helpers: extractBestEmail, extractSocialLinks,
                           tryContactPage. Scoring tuned for legal: intake@ /
                           consult@ / partner@ score higher than restaurant case.
@@ -33,12 +35,15 @@ src/
 ```
 
 **Flow:** Actor init → build search URLs → PlaywrightCrawler → for each place:
-1. Maps Overview phase (niche detection runs before lawyer enrichment because
-   the latter clicks the Reviews tab).
-2. Single website visit (emails + socials + practice areas + fee + languages +
-   services + booking + free-consult detection — all in one nav).
-3. Pure-compute firm-size classification.
-4. PPE charge calls per enabled enrichment.
+0. (in scraper.js, on the place's freshly-loaded page) Maps Overview enrichment —
+   niche detection runs before lawyer enrichment because the latter clicks the
+   Reviews tab. Done here, NOT via a second navigation, so each place is loaded
+   once — this halves Maps loads (less Google throttling) and runs review
+   sentiment on a page known to have rendered.
+1. (main.js) Single website visit (emails + socials + practice areas + fee +
+   languages + services + booking + free-consult detection — all in one nav).
+2. (main.js) Pure-compute firm-size classification.
+3. PPE charge calls per enabled enrichment.
 
 ## Input
 
