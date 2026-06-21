@@ -333,43 +333,66 @@ const THEME_KEYWORDS = {
     empathyAndCare:   ['caring', 'compassion', 'understanding', 'listened', 'patient', 'kind'],
 };
 
-export async function extractReviewSentiment(page) {
+/**
+ * Clicks the Reviews tab and confirms reviews rendered.
+ *
+ * Right after a Maps re-navigation the tab bar lags the heading by a second or
+ * two, and a click can fail to register before the panel settles — that race
+ * was silently dropping ~60% of review-sentiment results. So we wait for the
+ * panel to render, then retry the whole click→confirm cycle a few times with a
+ * generous per-attempt visibility timeout. Returns true once review nodes are
+ * present (whether via the tab or already-rendered featured reviews).
+ */
+async function openReviewsTab(page) {
+    // The tab bar only appears once the place panel itself has rendered.
+    await page.waitForSelector(
+        'h1.DUwDvf, h1.fontHeadlineLarge, div[role="main"] h1',
+        { timeout: 10_000 },
+    ).catch(() => {});
+
     const tabSelectors = [
         'button[role="tab"][aria-label*="Review" i]',
         'button[aria-label*="Reviews" i]',
         'button[jsaction*="reviewChart"]',
         'button[data-tab-index="1"]',
     ];
-    let clicked = false;
-    for (const sel of tabSelectors) {
-        try {
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+        let clicked = false;
+        for (const sel of tabSelectors) {
             const btn = page.locator(sel).first();
-            if (await btn.isVisible({ timeout: 1500 }).catch(() => false)) {
-                await btn.click();
+            if (await btn.isVisible({ timeout: 2500 }).catch(() => false)) {
+                await btn.click().catch(() => {});
                 clicked = true;
                 break;
             }
-        } catch { /* try next */ }
-    }
-    if (!clicked) {
-        try {
+        }
+        if (!clicked) {
             const byRole = page.getByRole('tab', { name: /review/i }).first();
-            if (await byRole.isVisible({ timeout: 1500 }).catch(() => false)) {
-                await byRole.click();
+            if (await byRole.isVisible({ timeout: 2500 }).catch(() => false)) {
+                await byRole.click().catch(() => {});
                 clicked = true;
             }
-        } catch { /* still nothing */ }
+        }
+
+        // Confirm the reviews list actually rendered before giving up.
+        const ok = await page
+            .waitForSelector('div[data-review-id], div.jftiEf', { timeout: 6000 })
+            .then(() => true)
+            .catch(() => false);
+        if (ok) return true;
+
+        // Tab not ready / click didn't register — brief backoff and retry.
+        await page.waitForTimeout(700);
     }
 
-    try {
-        await page.waitForSelector('div[data-review-id], div.jftiEf', { timeout: 12000 });
-    } catch {
-        if (!clicked) {
-            // eslint-disable-next-line no-console
-            console.warn('[reviewSentiment] Reviews tab not clickable — selector may be stale');
-        }
-        return null;
-    }
+    // Last resort: featured reviews are sometimes already on the Overview tab.
+    return (await page.$('div[data-review-id]')) != null;
+}
+
+export async function extractReviewSentiment(page) {
+    const reviewsReady = await openReviewsTab(page);
+    if (!reviewsReady) return null;
 
     try {
         await page.evaluate(() => {
