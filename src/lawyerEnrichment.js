@@ -8,8 +8,6 @@
  * consolidated website phase so we visit each firm's website at most once.
  */
 
-import { Actor } from 'apify';
-
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. PRACTICE AREAS — closest analog to restaurant "cuisine"
 // Source A: Maps category + sub-category tags (already captured as
@@ -335,48 +333,6 @@ const THEME_KEYWORDS = {
     empathyAndCare:   ['caring', 'compassion', 'understanding', 'listened', 'patient', 'kind'],
 };
 
-// ── DIAGNOSTIC INSTRUMENTATION (temporary) ────────────────────────────────────
-// When review sentiment fails on a place, dump a screenshot + a snapshot of the
-// tab bar / review DOM to the key-value store so we can see WHY the tab path
-// missed (wrong selectors? reviews not rendered? extraction selectors stale?).
-// Capped so a bad run can't flood storage. Remove once the gap is understood.
-let __reviewDebugCount = 0;
-const __REVIEW_DEBUG_MAX = 8;
-
-async function captureReviewDebug(page, tag) {
-    if (__reviewDebugCount >= __REVIEW_DEBUG_MAX) return;
-    const idx = ++__reviewDebugCount;
-    const safeTag = String(tag || 'place').replace(/[^a-z0-9]+/gi, '_').slice(0, 40);
-    const key = `REVIEW_DEBUG_${String(idx).padStart(2, '0')}_${safeTag}`;
-    try {
-        const info = await page.evaluate(() => {
-            const tabButtons = [...document.querySelectorAll(
-                'button[role="tab"], div[role="tablist"] button, button[aria-label]',
-            )].slice(0, 40).map(b => ({
-                text: (b.textContent || '').trim().slice(0, 40),
-                aria: (b.getAttribute('aria-label') || '').slice(0, 70),
-                role: b.getAttribute('role') || '',
-                cls:  (b.className || '').toString().slice(0, 70),
-            })).filter(b => b.text || b.aria);
-            const firstReview = document.querySelector('div[data-review-id]');
-            return {
-                url:            location.href,
-                h1:             document.querySelector('h1')?.textContent?.trim()?.slice(0, 60) || null,
-                hasTablist:     !!document.querySelector('div[role="tablist"]'),
-                reviewNodes:    document.querySelectorAll('div[data-review-id]').length,
-                jftiEfNodes:    document.querySelectorAll('div.jftiEf').length,
-                firstReviewHtml: firstReview ? firstReview.outerHTML.slice(0, 1200) : null,
-                tabButtons,
-            };
-        }).catch(e => ({ error: e.message }));
-        await Actor.setValue(`${key}.json`, info);
-        const shot = await page.screenshot({ fullPage: false }).catch(() => null);
-        if (shot) await Actor.setValue(`${key}.png`, shot, { contentType: 'image/png' });
-        // eslint-disable-next-line no-console
-        console.warn(`[reviewSentiment] DEBUG ${key}: reviewNodes=${info.reviewNodes} jftiEf=${info.jftiEfNodes} tabBtns=${(info.tabButtons || []).length} tablist=${info.hasTablist}`);
-    } catch { /* never let debug capture break enrichment */ }
-}
-
 /**
  * Clicks the Reviews tab and confirms reviews rendered.
  *
@@ -443,7 +399,7 @@ async function openReviewsTab(page) {
     return (await page.$('div[data-review-id]')) != null;
 }
 
-export async function extractReviewSentiment(page, tag) {
+export async function extractReviewSentiment(page) {
     let reviews = await collectReviews(page);
 
     // The reviews list sometimes hangs on a loading spinner: the histogram
@@ -457,10 +413,7 @@ export async function extractReviewSentiment(page, tag) {
         reviews = await collectReviews(page);
     }
 
-    if (!reviews.length) {
-        await captureReviewDebug(page, `${tag}__noreviews`);
-        return null;
-    }
+    if (!reviews.length) return null;
     return analyseReviews(reviews);
 }
 
@@ -589,7 +542,7 @@ export async function enrichLawyerFields(page, place) {
 
     // reviewSentiment runs LAST — it clicks the Reviews tab and leaves the
     // panel there. Everything else must complete on the Overview tab first.
-    enriched.reviewSentiment = await extractReviewSentiment(page, place.name).catch(() => null);
+    enriched.reviewSentiment = await extractReviewSentiment(page).catch(() => null);
 
     return enriched;
 }
