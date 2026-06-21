@@ -9,7 +9,7 @@
     "maxMemoryMbytes": 32768,
     "defaultRunOptions": {
         "memoryMbytes": 8192,
-        "timeoutSecs": 1800
+        "timeoutSecs": 3600
     },
     "input": "./INPUT_SCHEMA.json",
     "output": "./output_schema.json",
